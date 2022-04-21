@@ -1155,19 +1155,100 @@ class MusicBot(discord.Client):
             )
         return True
 
-    async def cmd_play(self, message, player, channel, author, permissions, leftover_args, song_url):
+    async def cmd_play(
+        self, message, _player, channel, author, permissions, leftover_args, song_url
+    ):
         """
         Usage:
-            {command_prefix}play BV or av number of Bilibili video
-            {command_prefix}play song url on bilibili or YouTube
-            {command_prefix}play text to search for on YouTube
+            {command_prefix}play song_link
+            {command_prefix}play text to search for
+            {command_prefix}play spotify_uri
 
         Adds the song to the playlist.  If a link is not provided, the first
         result from a youtube search is added to the queue.
+
+        If enabled in the config, the bot will also support Spotify URIs, however
+        it will use the metadata (e.g song name and artist) to find a YouTube
+        equivalent of the song. Streaming from Spotify is not possible.
         """
 
-        song_url = song_url.strip()
-        song_url = song_url.strip('<>')
+        return await self._cmd_play(
+            message,
+            _player,
+            channel,
+            author,
+            permissions,
+            leftover_args,
+            song_url,
+            head=False,
+        )
+
+    async def cmd_playnext(
+        self, message, _player, channel, author, permissions, leftover_args, song_url
+    ):
+        """
+        Usage:
+            {command_prefix}playnext song_link
+            {command_prefix}playnext text to search for
+            {command_prefix}playnext spotify_uri
+
+        Adds the song to the playlist next.  If a link is not provided, the first
+        result from a youtube search is added to the queue.
+
+        If enabled in the config, the bot will also support Spotify URIs, however
+        it will use the metadata (e.g song name and artist) to find a YouTube
+        equivalent of the song. Streaming from Spotify is not possible.
+        """
+
+        return await self._cmd_play(
+            message,
+            _player,
+            channel,
+            author,
+            permissions,
+            leftover_args,
+            song_url,
+            head=True,
+        )
+
+    async def _cmd_play(
+        self,
+        message,
+        _player,
+        channel,
+        author,
+        permissions,
+        leftover_args,
+        song_url,
+        head,
+    ):
+        if _player:
+            player = _player
+        vc = author.voice.channel if author.voice else None
+        response = await self.cmd_summon(
+            channel, channel.guild, author, vc
+        )  # @TheerapakG: As far as I know voice_channel param is unused
+        if self.config.embeds:
+            content = self._gen_embed()
+            content.title = "summon"
+            content.description = response.content
+        else:
+            content = response.content
+        await self.safe_send_message(
+            channel,
+            content,
+            expire_in=response.delete_after if self.config.delete_messages else 0,
+        )
+        player = self.get_player_in(channel.guild)
+
+        if not player:
+            raise exceptions.CommandError(
+                "The bot is not in a voice channel.  "
+                "Use %ssummon to summon it to your voice channel."
+                % self.config.command_prefix
+            )
+
+        song_url = song_url.strip("<>")
 
         await self.send_typing(channel)
 
